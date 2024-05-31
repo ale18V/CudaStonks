@@ -3,21 +3,48 @@ from numpy.typing import NDArray
 import math
 
 
+def dtanh(X: NDArray) -> NDArray:
+    return 1-np.tanh(X)**2
+
+
+def sigmoid(z: NDArray | float) -> NDArray | float:
+    return np.where(z >= 0,
+                    1 / (1 + np.exp(-z)),
+                    np.exp(z) / (1 + np.exp(z)))
+
+
+def relu(X: NDArray | float):
+    return np.maximum(0, X)
+
+
+def drelu(X: NDArray):
+    return (X > 0).astype(dtype=X.dtype)
+
+
+def regression(f, y):
+    return (f - y)**2
+
+
+def dregression(f, y):
+    return 2*(f - y)
+
+
 class NeuralNetwork:
-    def __init__(self, num_layers: int, num_cells: int, X: NDArray, Y: NDArray) -> None:
+    def __init__(self, num_hidden_layers: int, num_cells: int, X: NDArray, Y: NDArray) -> None:
         """
         @param: X is a numpy array of shape (m, n)
         @param: Y is a numpy array of shape (m, 1)
         """
-        self.num_layers: int = num_layers
-        self.m = X.shape[0]
+        self.num_layers: int = num_hidden_layers + 1  
         self.n = X.shape[1]
+        self.m = X.shape[0]
         self.k = 1  # Y.shape[1]
         self.W: list[NDArray] = self.generate_weights(
-            dim_features=self.n, dim_label=self.k, num_layers=num_layers, num_hidden_cells=num_cells)
+            dim_features=self.n, dim_label=self.k, num_layers=self.num_layers, num_hidden_cells=num_cells)
         self.X: NDArray = X
         self.Y: NDArray = Y
         self.loss = 0
+
 
     def generate_weights(self, dim_features: int, dim_label: int, num_layers: int, num_hidden_cells: int) -> list[NDArray]:
         """Weights to each hidden unit from the inputs (plus the added offset unit)
@@ -39,7 +66,7 @@ class NeuralNetwork:
 
         return W
 
-    def forward_propagate(self, Xi: NDArray, Yi: float) -> tuple[list[NDArray], list[NDArray]]:
+    def forward_propagate(self, Xi: NDArray) -> tuple[list[NDArray], list[NDArray]]:
         """
         Returns (pre, act)
         Act[k] is at index k (Activations are 0-based indexed)
@@ -48,28 +75,28 @@ class NeuralNetwork:
         act: list[NDArray] = [None for _ in range(self.num_layers)]
         pre: list[NDArray] = [None for _ in range(self.num_layers)]
 
-        act[0] = self.insertone(Xi)
+        act[0] = self.insertone(Xi).reshape(-1, 1)
         for i in range(self.num_layers - 1):
             pre[i] = self.W[i] @ act[i]  # TODO: Matrix multiply
             act[i+1] = self.insertone(self.activation_function(pre[i]))
 
         pre[-1] = self.W[-1] @ act[-1]
 
-        f = pre[-1][0]
-        self.loss += self.loss_function(f, Yi)
         return pre, act
 
     def backward_propagate(self, Xi: NDArray, Yi: float):
         """
         Calculates the gradient of the loss for the i-th row of the dataset 
         """
-        pre, act = self.forward_propagate(Xi, Yi)
+        pre, act = self.forward_propagate(Xi)
+        self.update_loss(pre[-1][0], Yi)
 
         delta_z: list[NDArray] = [None for _ in range(self.num_layers)]
         delta_a: list[NDArray] = [None for _ in range(self.num_layers)]
         grad_w: list[NDArray] = [None for _ in range(self.num_layers)]
 
-        delta_z[-1] = self.d_loss_function(f=pre[-1][0], y=Yi)
+        delta_z[-1] = np.array(self.d_loss_function(f=pre[-1]
+                               [0], y=Yi)).reshape(1, 1)
         for i in reversed(range(1, self.num_layers)):
             delta_a[i] = self.W[i].T @ delta_z[i]
             grad_w[i] = delta_z[i] @ act[i].T
@@ -100,8 +127,7 @@ class NeuralNetwork:
             it += 1
             if it % 10 == 0:
                 print(it)
-                cur_eval = self.loss + lam * \
-                    np.sum([np.sum(w**2) for w in self.W])
+                cur_eval = self.eval_loss(lam)
                 improvement = abs(cur_eval - last_eval)
                 print("Error:", cur_eval)
                 print("Improvement", improvement)
@@ -109,24 +135,39 @@ class NeuralNetwork:
                 stop = cur_eval < last_eval and improvement <= precision
                 last_eval = cur_eval
             self.loss = 0
-            
+
+    def predict(self, X: NDArray) -> NDArray:
+        Y = np.zeros(len(X), dtype=X.dtype)
+        for i in range(len(X)):
+            pre, act = self.forward_propagate(self.get_features(X, i))
+            Y[i] = pre[-1][0]
+        return Y
+
+    def eval_loss(self, lam):
+        return self.loss + lam*np.sum([np.sum(w**2) for w in self.W])
+
+    def update_loss(self, f, y):
+        self.loss += self.loss_function(f, y)
+
     def loss_function(self, f: float, y: float):
-        return (f-y)**2
+        return regression(f, y)
+        # return -np.log(sigmoid(y*f))
 
     def d_loss_function(self, f: float, y: float):
-        return 2*(f - y)
+        return dregression(f, y)
+        # return -sigmoid(-y*f)*y
 
     def activation_function(self, pre: NDArray):
-        return np.maximum(0, pre)
+        return relu(pre)
+        # return np.tanh(pre)
 
     def d_activation_function(self, X: NDArray):
-        return (X > 0).astype(X.dtype)
+        return drelu(X)
+        #return 1-np.tanh(X)**2
 
     def insertone(self, X: NDArray):
         """Adds a '1' at the start of a 1-d array"""
-        if (len(X.shape) > 1):
-            raise ValueError("The array is supposed to be 1-d")
-        return np.insert(X, values=1, axis=0)
+        return np.insert(X, 0, 1, axis=0)
 
     def update_eta(self, Eg2, sumofgrad2):
         """When you need "eta" (the step size), do this after you have already
