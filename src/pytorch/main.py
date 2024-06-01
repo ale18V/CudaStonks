@@ -23,7 +23,7 @@ class StockPredictor(nn.Module):
 
 
 # Create dummy data for X (input) and Y (output)
-DATA_DIR = os.path.join(os.getcwd(), "../data")
+DATA_DIR = os.path.join(os.getcwd(), "../../data")
 for filename in os.listdir(DATA_DIR):
     df = pd.read_csv(os.path.join(DATA_DIR, filename))
     Xt = df[["Open", "High", "Low", "Close"]].to_numpy()

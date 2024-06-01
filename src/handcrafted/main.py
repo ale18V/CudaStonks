@@ -5,7 +5,7 @@ import numpy as np
 
 HIDDEN_LAYERS = 3
 HIDDEN_CELLS = 32
-DATA_DIR = os.path.join(os.getcwd(), "../data")
+DATA_DIR = os.path.join(os.getcwd(), "../../data")
 
 
 def get_windowed_array(A: np.ndarray, window_size: int):
