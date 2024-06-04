@@ -34,7 +34,7 @@ for X, Y in loaddata():
         X, Y, test_size=0.3, shuffle=False)
 
     trainX = torch.from_numpy(np.log(trainXt)).to(device, dtype=torch.float64)
-    trainY = torch.from_numpy(np.log(trainYt)).to(device)
+    trainY = torch.from_numpy(np.log(trainYt)).to(device, dtype=torch.float64)
 
     testX = torch.from_numpy(np.log(testXt)).to(device, dtype=torch.float64)
 

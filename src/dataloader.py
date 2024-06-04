@@ -27,6 +27,6 @@ def loaddata():
         h = 8
         m, s = Xt.shape
 
-        X = get_windowed_array(Xt, h).astype(dtype=np.float64)
+        X = get_windowed_array(Xt, h)
         Y = Yt[h-1:-1]
         yield X, Y
