@@ -4,16 +4,19 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from dataloader import loaddata
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 
 class StockPredictor(nn.Module):
     def __init__(self, dim_features: int):
         super(StockPredictor, self).__init__()
         # First hidden layer
-        self.fc1 = nn.Linear(dim_features, 128, dtype=torch.float64)
+        self.fc1 = nn.Linear(dim_features, 40, dtype=torch.float64)
         # Second hidden layer
-        self.fc2 = nn.Linear(128, 32, dtype=torch.float64)
-        self.fc3 = nn.Linear(32, 1, dtype=torch.float64)   # Output layer
+        self.fc2 = nn.Linear(40, 20, dtype=torch.float64)
+        self.fc3 = nn.Linear(20, 1, dtype=torch.float64)   # Output layer
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -22,33 +25,20 @@ class StockPredictor(nn.Module):
         return x
 
 
-# Create dummy data for X (input) and Y (output)
-DATA_DIR = os.path.join(os.getcwd(), "../data")
-for filename in os.listdir(DATA_DIR):
-    df = pd.read_csv(os.path.join(DATA_DIR, filename))
-    Xt = df[["Open", "High", "Low", "Close"]].to_numpy()
-    Yt = df["High"].to_numpy()
-    s = Xt.shape[1]
-    h = 8
-    m = len(Xt)
-    X = np.zeros(shape=(m-h, h*s))
-    for i in range(h):
-        X[:, s*i:s*(i+1)] = Xt[i:-h+i]
-    Y = Yt[h:]
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+for X, Y in loaddata():
+    m, n = X.shape
 
-    trainX, testX = X[:int(m*0.6)], X[int(m*0.6):]
-    trainY, testY = Y[:int(m*0.6)], Y[int(m*0.6):]
-    trainX = torch.from_numpy(trainX).to(device)
-    trainY = torch.from_numpy(trainY).to(device)
+    trainXt, testXt, trainYt, testYt = train_test_split(
+        X, Y, test_size=0.3, shuffle=False)
 
-    trainX = torch.tensor(trainX, dtype=torch.float64)
-    trainY = torch.tensor(trainY, dtype=torch.float64)
+    trainX = torch.from_numpy(np.log(trainXt)).to(device, dtype=torch.float64)
+    trainY = torch.from_numpy(np.log(trainYt)).to(device)
 
-    testX = torch.from_numpy(testX).to(device)
+    testX = torch.from_numpy(np.log(testXt)).to(device, dtype=torch.float64)
 
-    model = StockPredictor(h*s)
+    model = StockPredictor(n)
 
     # Move the model to GPU if available
     model.to(device)
@@ -57,8 +47,8 @@ for filename in os.listdir(DATA_DIR):
     criterion = nn.MSELoss(reduction='sum')
 
     # Optimizer (Adam)
-    optimizer = optim.Adam(model.parameters(), lr=1e-3,
-                           weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=0.001,
+                           weight_decay=1e-4)
 
     def train(model, criterion, optimizer, X, Y, epochs=1000):
         model.train()
@@ -79,21 +69,20 @@ for filename in os.listdir(DATA_DIR):
     train(model, criterion, optimizer, trainX, trainY, epochs=2000)
     model.eval()
     with torch.no_grad():
-        predTestY = model(torch.tensor(testX, dtype=torch.float64))
-        predTrainY = model(torch.tensor(trainX, dtype=torch.float64))
-    predTestY = predTestY.cpu().numpy()
-    predTrainY = predTrainY.cpu().numpy()
+        predTestY = model(testX).cpu().numpy()
+        predTrainY = model(trainX).cpu().numpy()
+
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(nrows=1, ncols=2)
-    axes[0].plot(range(len(testY)), testY, 'r', label='Actual')
-    axes[1].plot(range(len(trainY)), trainY.cpu(), 'r', label='Actual')
-
-    axes[0].plot(range(len(predTestY)), predTestY, 'b', label='Predicted')
-    axes[1].plot(range(len(predTrainY)), predTrainY, 'b', label='Predicted')
+    axes[0].plot(range(len(testYt)), testYt, 'r', label='Actual')
+    axes[1].plot(range(len(trainY)), trainYt, 'r', label='Actual')
+    axes[0].plot(range(len(predTestY)), np.exp(
+        predTestY), 'b', label='Predicted')
+    axes[1].plot(range(len(predTrainY)), np.exp(
+        predTrainY), 'b', label='Predicted')
     for ax in axes:
         ax.set_xlabel('Time')
         ax.set_ylabel('Value')
         ax.set_title('Actual vs Predicted')
         ax.legend()
     plt.show()
-    print(np.mean(np.abs(predTestY - testY)))
