@@ -13,10 +13,10 @@ class StockPredictor(nn.Module):
     def __init__(self, dim_features: int):
         super(StockPredictor, self).__init__()
         # First hidden layer
-        self.fc1 = nn.Linear(dim_features, 40, dtype=torch.float64)
+        self.fc1 = nn.Linear(dim_features, 64, dtype=torch.float64)
         # Second hidden layer
-        self.fc2 = nn.Linear(40, 20, dtype=torch.float64)
-        self.fc3 = nn.Linear(20, 1, dtype=torch.float64)   # Output layer
+        self.fc2 = nn.Linear(64, 32, dtype=torch.float64)
+        self.fc3 = nn.Linear(32, 1, dtype=torch.float64)   # Output layer
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -27,16 +27,17 @@ class StockPredictor(nn.Module):
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 for X, Y in loaddata():
     m, n = X.shape
 
-    trainXt, testXt, trainYt, testYt = train_test_split(
-        X, Y, test_size=0.3, shuffle=False)
+    trainX, testX, trainY, testY = train_test_split(
+        np.log(X), np.log(Y), test_size=0.3, shuffle=False)
 
-    trainX = torch.from_numpy(np.log(trainXt)).to(device, dtype=torch.float64)
-    trainY = torch.from_numpy(np.log(trainYt)).to(device, dtype=torch.float64)
+    trainX = torch.from_numpy(trainX).to(device, dtype=torch.float64)
+    trainY = torch.from_numpy(trainY).to(device, dtype=torch.float64)
 
-    testX = torch.from_numpy(np.log(testXt)).to(device, dtype=torch.float64)
+    testX = torch.from_numpy(testX).to(device, dtype=torch.float64)
 
     model = StockPredictor(n)
 
@@ -44,10 +45,10 @@ for X, Y in loaddata():
     model.to(device)
 
     # Loss function (Mean Squared Error)
-    criterion = nn.MSELoss(reduction='sum')
+    criterion = nn.L1Loss(reduction='sum')
 
     # Optimizer (Adam)
-    optimizer = optim.Adam(model.parameters(), lr=0.001,
+    optimizer = optim.Adam(model.parameters(), lr=0.0001,
                            weight_decay=1e-4)
 
     def train(model, criterion, optimizer, X, Y, epochs=1000):
@@ -66,7 +67,7 @@ for X, Y in loaddata():
                 print(f'Epoch [{epoch}/{epochs}], Loss: {loss.item():.4f}')
 
     # Train the model
-    train(model, criterion, optimizer, trainX, trainY, epochs=2000)
+    train(model, criterion, optimizer, trainX, trainY, epochs=10000)
     model.eval()
     with torch.no_grad():
         predTestY = model(testX).cpu().numpy()
@@ -74,12 +75,10 @@ for X, Y in loaddata():
 
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(nrows=1, ncols=2)
-    axes[0].plot(range(len(testYt)), testYt, 'r', label='Actual')
-    axes[1].plot(range(len(trainY)), trainYt, 'r', label='Actual')
-    axes[0].plot(range(len(predTestY)), np.exp(
-        predTestY), 'b', label='Predicted')
-    axes[1].plot(range(len(predTrainY)), np.exp(
-        predTrainY), 'b', label='Predicted')
+    axes[0].plot(range(len(testY)), testY, 'r', label='Actual')
+    axes[1].plot(range(len(trainY)), trainY, 'r', label='Actual')
+    axes[0].plot(range(len(predTestY)), predTestY, 'b', label='Predicted')
+    axes[1].plot(range(len(predTrainY)), predTrainY, 'b', label='Predicted')
     for ax in axes:
         ax.set_xlabel('Time')
         ax.set_ylabel('Value')

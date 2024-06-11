@@ -23,30 +23,30 @@ class Optimizer:
     def __init__(self) -> None:
         pass
 
-    def step(self, grad: list[NDArray]) -> list[NDArray]:
+    def step(self, grad: list[NDArray], weights: list[NDArray]) -> list[NDArray]:
         return []
 
 
 class NeuralNetwork:
-    def __init__(self, num_hidden_layers: int, num_cells: int, X: NDArray, Y: NDArray, optimizer: Optimizer,
+    def __init__(self, dim_features: int, dim_label: int, dim_hidden_layers: list[int], optimizer: Optimizer,
                  activation_fun: NNActivation, loss_fun: NNLoss) -> None:
         """
         @param: X is a numpy array of shape (m, n)
         @param: Y is a numpy array of shape (m, 1)
+        @param: dim_layers the dimensions of all the layers
         """
-        self.num_layers: int = num_hidden_layers + 1
-        self.m, self.n = X.shape
-        self.k = 1  # Y.shape[1]
+        self.num_layers: int = len(dim_hidden_layers) + 1
+        self.dim_features = dim_features
+        self.dim_label = dim_label
+
         self.W: list[NDArray] = self.generate_weights(
-            dim_features=self.n, dim_label=self.k, num_layers=self.num_layers, num_hidden_cells=num_cells)
-        self.X: NDArray = X
-        self.Y: NDArray = Y
+            self.num_layers, [dim_features] + dim_hidden_layers + [dim_label])
         self.loss = 0
         self.loss_function = loss_fun
         self.activation_function = activation_fun
         self.optimizer = optimizer
 
-    def generate_weights(self, dim_features: int, dim_label: int, num_layers: int, num_hidden_cells: int) -> list[NDArray]:
+    def generate_weights(self, num_layers: int, dim_layers: list[int]) -> list[NDArray]:
         """Weights to each hidden unit from the inputs (plus the added offset unit)
         W1 is gonna be shape (n+1, nhid)
         W2 is gonna be shape (nhid+1, nhid/2)
@@ -54,21 +54,18 @@ class NeuralNetwork:
         """
         W = [None for i in range(num_layers)]
 
-        rows = num_hidden_cells
-        cols = dim_features + 1
-
         def kaiming_init(p, d):
             """p is the size of the previous layer
             d is the size of the current layer
             """
-            return np.random.normal(size=p*d).reshape(p, d)*math.sqrt(2.0/p)
+            stdv = math.sqrt(2. / p)
+            return np.random.randn(p, d)*stdv
 
-        for i in range(num_layers - 1):
+        for i in range(num_layers):
+            rows = dim_layers[i+1]
+            cols = dim_layers[i] + 1
             W[i] = kaiming_init(rows, cols)
-            cols = rows + 1  # Add the constant 1 term to the activations
-            rows = rows // 2
 
-        W[-1] = kaiming_init(dim_label, cols)
         return W
 
     def forward_propagate(self, X: NDArray) -> tuple[list[NDArray], list[NDArray]]:
@@ -102,32 +99,30 @@ class NeuralNetwork:
         pre, act = self.forward_propagate(X)
         m, n = Y.shape
 
-        self.update_loss(pre[-1], Y)
+        self.update_loss(pre[-1].reshape(m, -1), Y)
 
         delta_z: list[NDArray] = [None for _ in range(self.num_layers)]
         delta_a: list[NDArray] = [None for _ in range(self.num_layers)]
         grad_w: list[NDArray] = [None for _ in range(self.num_layers)]
         delta_z[-1] = np.array(self.loss_function.derivative(F=pre[-1],
                                Y=Y.reshape(m, n, 1)))
-
+        
         for i in reversed(range(1, self.num_layers)):
             delta_a[i] = self.W[i].T @ delta_z[i]
             grad_w[i] = np.sum(delta_z[i] @ act[i].swapaxes(1, -1), axis=0)  # noqa: Transpose the activations
-            delta_z[i -
-                    1] = np.multiply(self.activation_function.derivative(pre[i-1]), act[i][:, 1:])
+            delta_z[i-1] = self.activation_function.derivative(
+                pre[i-1]) * delta_a[i][:, 1:, :]
 
         grad_w[0] = np.sum(delta_z[0] @ act[0].swapaxes(1, -1), axis=0)
         return grad_w
 
-    def train(self, lam: float, epoch: int = 1000):
+    def train(self, X: NDArray, Y: NDArray, lam: float, epoch: int = 1000):
         last_eval, cur_eval = -math.inf, None
         for k in range(epoch):
-            gradL = self.backward_propagate(self.X, self.Y)
+            gradL = self.backward_propagate(X, Y)
             for j, w in enumerate(self.W):
                 gradL[j] += 2*lam*w
-
-            for j, dw in enumerate(self.optimizer.step(gradL)):
-                self.W[j] -= dw
+            self.W = self.optimizer.step(gradL, self.W)
 
             if k % 10 == 0:
                 print(k)
