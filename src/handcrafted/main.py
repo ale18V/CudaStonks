@@ -142,3 +142,5 @@ for X, Y in loaddata():
         ax.set_title('Actual vs Predicted')
         ax.legend()
     plt.show()
+
+    fig.savefig('actual_vs_predicted.png')
