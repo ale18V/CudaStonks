@@ -67,7 +67,12 @@ for X, Y in loaddata():
                 print(f'Epoch [{epoch}/{epochs}], Loss: {loss.item():.4f}')
 
     # Train the model
+    import time
+    print("Training model")
+    start = time.time()
     train(model, criterion, optimizer, trainX, trainY, epochs=2000)
+    end = time.time()
+    print("Time elapsed:", end-start)
     model.eval()
     with torch.no_grad():
         predTestY = model(testX).cpu().numpy()
