@@ -1,9 +1,9 @@
-.PHONY: gpu pytorch gpu
+.PHONY: gpu pytorch cpu
 
 gpu:	
 	env PYTHONPATH="$PYTHONPATH:$(pwd)"	python3 handcrafted/gpu/main.py
 
-gpu:	
+cpu:	
 	env PYTHONPATH="$PYTHONPATH:$(pwd)"	python3 handcrafted/main.py
 
 pytorch:
