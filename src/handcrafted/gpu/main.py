@@ -116,7 +116,7 @@ for X, Y in loaddata():
     m, n = X.shape
 
     opt = Adam(eta=0.001)
-    model = NeuralNetwork(dim_features=n, dim_label=1, dim_hidden_layers=[40, 20],
+    model = NeuralNetwork(dim_features=n, dim_label=1, dim_hidden_layers=[32, 16],
                           activation_fun=ReLU(),
                           loss_fun=MSELoss(), optimizer=opt)
 
@@ -126,7 +126,7 @@ for X, Y in loaddata():
 
     fig, axes = plt.subplots(nrows=1, ncols=2)
     axes[0].plot(range(len(testY)), testY, c='r', label='Actual')
-    axes[1].plot(range(len(Y)), trainY, c='r', label='Actual')
+    axes[1].plot(range(len(trainY)), trainY, c='r', label='Actual')
 
     axes[0].scatter(range(len(predTestY)), predTestY, c='b', label='Predicted')
     axes[1].scatter(range(len(predY)), predY, c='b', label='Predicted')

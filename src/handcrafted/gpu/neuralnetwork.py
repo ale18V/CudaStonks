@@ -4,7 +4,7 @@ from handcrafted.neuralnetwork import NeuralNetwork
 from numba import cuda, jit
 from numpy.typing import NDArray
 
-TILE_SIZE = 8
+TILE_SIZE = 16
 
 
 class NNActivation:
@@ -34,62 +34,73 @@ class Optimizer:
 class NeuralNetworkGPU(NeuralNetwork):
     @staticmethod
     @cuda.jit
-    def weight_mult_kernel(W, A, C):
-        # Define an array in the shared memory
-        # The size and type of the arrays must be known at compile time
-        sW = cuda.shared.array(
-            shape=(TILE_SIZE, TILE_SIZE), dtype=np.float64)
-        sA = cuda.shared.array(
-            shape=(TILE_SIZE, TILE_SIZE, TILE_SIZE), dtype=np.float64)
-
-        x, y, z = cuda.grid(3)
-        tx, ty, tz = cuda.threadIdx.x, cuda.threadIdx.y, cuda.threadIdx.z
-        p = A.shape[1]
-
-        if x >= C.shape[0] or y >= C.shape[1] or z >= C.shape[2]:
-            # Quit if (x, y) is outside of valid C boundary
-            return
-
-        # Each thread computes one element in the result matrix.
-        # The dot product is chunked into TPB-long segments.
-        tmp = 0.
-        for i in range(0, p, TILE_SIZE):
-            # Preload data into shared memory
-            if tx == 0:
-                sW[ty, tz] = W[y + i, z]
-
-            sA[tx, ty, tz] = A[x, y, tz + i]
-
-            # Wait until all threads finish preloading
-            cuda.syncthreads()
-
-            # Computes partial product on the shared memory
-            for j in range(TILE_SIZE):
-                tmp += sW[j, tz] * sA[tx, ty, j]
-
-            # Wait until all threads finish computing
-            cuda.syncthreads()
-
-        C[x, y, z] = tmp
-
-    def weight_mult(self, W: NDArray, B: NDArray) -> NDArray:
-        """Performs pairwise matrix multiplication on a list of matrices
-        @param: A is size (q, p)
-        @param: B is size (m, p, d)
-        @return: C is size (m, q, d)
+    def matmul_kernel(A: NDArray, B: NDArray, C: NDArray):
+        """Performs matrix multiplication
+        @param: A a matrix of size (m, k)
+        @param: B a matrix of size (k, n)
+        @return: C a list of the matrix products of size (m, n)
         """
-        (m, p, d), q = B.shape, W.shape[0]
-        C = np.zeros((m, q, d))
+        # Define shared memory arrays
+        cacheA = cuda.shared.array((TILE_SIZE, TILE_SIZE), dtype=np.float64)
+        cacheB = cuda.shared.array((TILE_SIZE, TILE_SIZE), dtype=np.float64)
 
-        W_device = cuda.to_device(W)
-        B_device = cuda.to_device(B)
+        # Calculate thread indices
+        col, row = cuda.grid(2)
+        tx = cuda.threadIdx.x
+        ty = cuda.threadIdx.y
+
+        # Initialize the accumulation variable
+        tmp = 0.0
+        (m, k), n = A.shape, B.shape[1]
+
+        # Loop over the tiles
+        for p in range(0, k, TILE_SIZE):
+            # Load elements into shared memory
+            if row < m and (p + tx) < k:
+                cacheA[ty, tx] = A[row, p + tx]
+            else:
+                cacheA[ty, tx] = 0.0
+
+            if col < n and (p + ty) < k:
+                cacheB[ty, tx] = B[p + ty, col]
+            else:
+                cacheB[ty, tx] = 0.0
+
+            # Synchronize threads to ensure all data is loaded
+            cuda.syncthreads()
+
+            # Compute partial product
+            for i in range(TILE_SIZE):
+                tmp += cacheA[ty, i] * cacheB[i, tx]
+
+            # Synchronize threads to ensure computation is complete
+            cuda.syncthreads()
+
+        # Write the result to the output matrix
+        if row < m and col < n:
+            C[row, col] = tmp
+
+    def weight_mult(self, W: NDArray, M: NDArray) -> NDArray:
+        """
+        @param: W is the weight matrix of (q, p)
+        @param: M is an array of m vectors to be multiplied to W
+        @return: C is size (m, q) 
+        and contains the list of matrix products between W and every vector in M.
+        """
+        m, q = M.shape[0], W.shape[0]
+        C = np.zeros((m, q))
+
+        W_device = cuda.to_device(W.T)
+        M_Device = cuda.to_device(M)
         C_device = cuda.to_device(C)
-        block_size = (TILE_SIZE, TILE_SIZE, TILE_SIZE)
+
+        block_size = (TILE_SIZE, TILE_SIZE)
+
         grid_size = (int(np.ceil(m/block_size[0])),
-                     int(np.ceil(q/block_size[1])),
-                     int(np.ceil(d/block_size[2])))
-        self.weight_mult_kernel[grid_size, block_size](
-            W_device, B_device, C_device)
+                     int(np.ceil(q/block_size[1])))
+
+        self.matmul_kernel[grid_size, block_size](
+            M_Device, W_device, C_device)
 
         return C_device.copy_to_host()
 
