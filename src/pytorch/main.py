@@ -45,13 +45,13 @@ for X, Y in loaddata():
     model.to(device)
 
     # Loss function (Mean Squared Error)
-    criterion = nn.L1Loss(reduction='sum')
+    criterion = nn.MSELoss(reduction='sum')
 
     # Optimizer (Adam)
     optimizer = optim.Adam(model.parameters(), lr=0.0001,
-                           weight_decay=1e-4)
+                           weight_decay=1e-5)
 
-    def train(model, criterion, optimizer, X, Y, epochs=1000):
+    def train(model, criterion, optimizer, X, Y, epochs=2000):
         model.train()
         for epoch in range(epochs):
             # Forward pass
@@ -67,7 +67,7 @@ for X, Y in loaddata():
                 print(f'Epoch [{epoch}/{epochs}], Loss: {loss.item():.4f}')
 
     # Train the model
-    train(model, criterion, optimizer, trainX, trainY, epochs=10000)
+    train(model, criterion, optimizer, trainX, trainY, epochs=2000)
     model.eval()
     with torch.no_grad():
         predTestY = model(testX).cpu().numpy()
@@ -76,7 +76,7 @@ for X, Y in loaddata():
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(nrows=1, ncols=2)
     axes[0].plot(range(len(testY)), testY, 'r', label='Actual')
-    axes[1].plot(range(len(trainY)), trainY, 'r', label='Actual')
+    axes[1].plot(range(len(trainY)), trainY.cpu(), 'r', label='Actual')
     axes[0].plot(range(len(predTestY)), predTestY, 'b', label='Predicted')
     axes[1].plot(range(len(predTrainY)), predTrainY, 'b', label='Predicted')
     for ax in axes:
