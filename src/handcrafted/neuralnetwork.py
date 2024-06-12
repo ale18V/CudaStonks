@@ -106,7 +106,7 @@ class NeuralNetwork:
         grad_w: list[NDArray] = [None for _ in range(self.num_layers)]
         delta_z[-1] = np.array(self.loss_function.derivative(F=pre[-1],
                                Y=Y.reshape(m, n, 1)))
-        
+
         for i in reversed(range(1, self.num_layers)):
             delta_a[i] = self.W[i].T @ delta_z[i]
             grad_w[i] = np.sum(delta_z[i] @ act[i].swapaxes(1, -1), axis=0)  # noqa: Transpose the activations
@@ -124,14 +124,11 @@ class NeuralNetwork:
                 gradL[j] += 2*lam*w
             self.W = self.optimizer.step(gradL, self.W)
 
-            if k % 10 == 0:
-                print(k)
+            if k % 100 == 0:
                 cur_eval = self.eval_loss(lam)
                 improvement = abs(cur_eval - last_eval)
-                print("Error:", cur_eval)
-                print("Improvement", improvement)
+                print(f"[Epoch {k}: err = {cur_eval} / imp = {improvement}]")
                 last_eval = cur_eval
-                print()
 
             self.loss = 0
 
