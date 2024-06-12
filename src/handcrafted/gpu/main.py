@@ -116,11 +116,15 @@ for X, Y in loaddata():
     m, n = X.shape
 
     opt = Adam(eta=0.001)
-    model = NeuralNetwork(dim_features=n, dim_label=1, dim_hidden_layers=[32, 16],
+    model = NeuralNetwork(dim_features=n, dim_label=1, dim_hidden_layers=[64, 16],
                           activation_fun=ReLU(),
                           loss_fun=MSELoss(), optimizer=opt)
-
+    import time
+    print("Training model")
+    start = time.time()
     model.train(trainX, trainY, lam=1e-5, epoch=2000)
+    end = time.time()
+    print("Time elapsed:", end - start)
     predTestY = model.predict(testX)
     predY = model.predict(trainX)
 

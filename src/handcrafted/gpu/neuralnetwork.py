@@ -4,7 +4,7 @@ from handcrafted.neuralnetwork import NeuralNetwork
 from numba import cuda, jit
 from numpy.typing import NDArray
 
-TILE_SIZE = 16
+BLOCK_SIZE = 16
 
 
 class NNActivation:
@@ -41,8 +41,8 @@ class NeuralNetworkGPU(NeuralNetwork):
         @return: C a list of the matrix products of size (m, n)
         """
         # Define shared memory arrays
-        cacheA = cuda.shared.array((TILE_SIZE, TILE_SIZE), dtype=np.float64)
-        cacheB = cuda.shared.array((TILE_SIZE, TILE_SIZE), dtype=np.float64)
+        cacheA = cuda.shared.array((BLOCK_SIZE, BLOCK_SIZE), dtype=np.float64)
+        cacheB = cuda.shared.array((BLOCK_SIZE, BLOCK_SIZE), dtype=np.float64)
 
         # Calculate thread indices
         col, row = cuda.grid(2)
@@ -54,7 +54,7 @@ class NeuralNetworkGPU(NeuralNetwork):
         (m, k), n = A.shape, B.shape[1]
 
         # Loop over the tiles
-        for p in range(0, k, TILE_SIZE):
+        for p in range(0, k, BLOCK_SIZE):
             # Load elements into shared memory
             if row < m and (p + tx) < k:
                 cacheA[ty, tx] = A[row, p + tx]
@@ -70,7 +70,7 @@ class NeuralNetworkGPU(NeuralNetwork):
             cuda.syncthreads()
 
             # Compute partial product
-            for i in range(TILE_SIZE):
+            for i in range(BLOCK_SIZE):
                 tmp += cacheA[ty, i] * cacheB[i, tx]
 
             # Synchronize threads to ensure computation is complete
@@ -94,7 +94,7 @@ class NeuralNetworkGPU(NeuralNetwork):
         M_Device = cuda.to_device(M)
         C_device = cuda.to_device(C)
 
-        block_size = (TILE_SIZE, TILE_SIZE)
+        block_size = (BLOCK_SIZE, BLOCK_SIZE)
 
         grid_size = (int(np.ceil(m/block_size[0])),
                      int(np.ceil(q/block_size[1])))
@@ -108,7 +108,7 @@ class NeuralNetworkGPU(NeuralNetwork):
         act: list[NDArray] = [None for _ in range(self.num_layers)]
         pre: list[NDArray] = [None for _ in range(self.num_layers)]
         m, n = X.shape
-        act[0] = np.insert(X, obj=0, values=1, axis=1).reshape(m, n+1, 1)
+        act[0] = np.insert(X, obj=0, values=1, axis=1).reshape(m, n+1)
         for i in range(self.num_layers - 1):
             # TODO: Matrix multiply
             pre[i] = self.weight_mult(self.W[i], act[i])
@@ -132,7 +132,7 @@ class NeuralNetworkGPU(NeuralNetwork):
         delta_a: list[NDArray] = [None for _ in range(self.num_layers)]
         grad_w: list[NDArray] = [None for _ in range(self.num_layers)]
         delta_z[-1] = np.array(self.loss_function.derivative(F=pre[-1],
-                               Y=Y.reshape(m, n, 1)))
+                               Y=Y.reshape(m, n)))
 
         for i in reversed(range(1, self.num_layers)):
             delta_a[i] = self.weight_mult(self.W[i].T, delta_z[i])
