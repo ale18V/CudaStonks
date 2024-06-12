@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from typing import Any
 from numpy.typing import NDArray
 from sklearn.model_selection import train_test_split
-from neuralnetwork import NNActivation, NNLoss, NeuralNetwork, Optimizer
+from neuralnetwork import NNActivation, NNLoss, NeuralNetworkGPU, Optimizer
 import numpy as np
 import sys
 sys.path.append("../")
@@ -115,8 +115,8 @@ for X, Y in loaddata():
 
     m, n = X.shape
 
-    opt = Adam(eta=0.001)
-    model = NeuralNetwork(dim_features=n, dim_label=1, dim_hidden_layers=[64, 16],
+    opt = Adam(eta=0.01)
+    model = NeuralNetworkGPU(dim_features=n, dim_label=1, dim_hidden_layers=[64, 64],
                           activation_fun=ReLU(),
                           loss_fun=MSELoss(), optimizer=opt)
     import time

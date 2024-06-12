@@ -45,7 +45,7 @@ class NeuralNetworkGPU(NeuralNetwork):
         cacheB = cuda.shared.array((BLOCK_SIZE, BLOCK_SIZE), dtype=np.float64)
 
         # Calculate thread indices
-        col, row = cuda.grid(2)
+        row, col = cuda.grid(2)
         tx = cuda.threadIdx.x
         ty = cuda.threadIdx.y
 
@@ -56,22 +56,22 @@ class NeuralNetworkGPU(NeuralNetwork):
         # Loop over the tiles
         for p in range(0, k, BLOCK_SIZE):
             # Load elements into shared memory
-            if row < m and (p + tx) < k:
-                cacheA[ty, tx] = A[row, p + tx]
+            if row < m and (p + ty) < k:
+                cacheA[tx, ty] = A[row, p + ty]
             else:
-                cacheA[ty, tx] = 0.0
+                cacheA[tx, ty] = 0.0
 
-            if col < n and (p + ty) < k:
-                cacheB[ty, tx] = B[p + ty, col]
+            if col < n and (p + tx) < k:
+                cacheB[tx, ty] = B[p + tx, col]
             else:
-                cacheB[ty, tx] = 0.0
+                cacheB[tx, ty] = 0.0
 
             # Synchronize threads to ensure all data is loaded
             cuda.syncthreads()
 
             # Compute partial product
             for i in range(BLOCK_SIZE):
-                tmp += cacheA[ty, i] * cacheB[i, tx]
+                tmp += cacheA[tx, i] * cacheB[i, ty]
 
             # Synchronize threads to ensure computation is complete
             cuda.syncthreads()
@@ -83,7 +83,7 @@ class NeuralNetworkGPU(NeuralNetwork):
     def weight_mult(self, W: NDArray, M: NDArray) -> NDArray:
         """
         @param: W is the weight matrix of (q, p)
-        @param: M is an array of m vectors to be multiplied to W
+        @param: M is an array of m vectors to be multiplied to W (m, p)
         @return: C is size (m, q) 
         and contains the list of matrix products between W and every vector in M.
         """
@@ -103,6 +103,54 @@ class NeuralNetworkGPU(NeuralNetwork):
             M_Device, W_device, C_device)
 
         return C_device.copy_to_host()
+
+    def gpu_grad(self, dz: NDArray, act: NDArray) -> NDArray:
+        """Multiplies and sums dz with activations to calculate the gradient
+        @param: dz is of shape (m, p)
+        @param: act is of shape (m, q)
+        @return: G the gradient of shape (p, q)
+        """
+        dz_device = cuda.to_device(dz)
+        act_device = cuda.to_device(act)
+        m, p = dz.shape
+        m, q = act.shape
+
+        G_device = cuda.to_device(np.zeros((p, q)))
+        NUM_BLOCKS = 4
+
+        grid_size = (int(np.ceil(p / BLOCK_SIZE)),
+                     int(np.ceil(q/BLOCK_SIZE)),
+                     NUM_BLOCKS)
+
+        self.grad_kernel[grid_size, (BLOCK_SIZE, BLOCK_SIZE, NUM_BLOCKS)](
+            dz_device, act_device, G_device, m)
+        return G_device.copy_to_host()
+
+    @staticmethod
+    @cuda.jit
+    def grad_kernel(Dz: NDArray, A: NDArray, G: NDArray, m: int):
+        """
+        @param: Dz list of m vectors of length p
+        @param: A list of m vectors of length q
+        @return: G sum of the pairwise matrix product of the vectors in the lists
+        """
+        sDz = cuda.shared.array(shape=(4, BLOCK_SIZE), dtype=np.float64)
+        sA = cuda.shared.array(shape=(4, BLOCK_SIZE), dtype=np.float64)
+        x, y, z = cuda.grid(3)
+        tx, ty, tz = cuda.threadIdx.x, cuda.threadIdx.y, cuda.threadIdx.z
+        tmp = 0.
+        _, __, stride = cuda.gridsize(3)
+        
+        for i in range(0, m, stride):
+            if (z+i) < m:
+                if ty == 0:
+                    sDz[tz, tx] = Dz[z + i, x]
+                if tx == 0:
+                    sA[tz, ty] = A[z+i, y]
+                cuda.syncthreads()
+                tmp += sDz[tz, tx]*sA[tz, ty]
+        if x < G.shape[0] and y < G.shape[1]:
+            cuda.atomic.add(G, (x, y), tmp)
 
     def forward_propagate(self, X: NDArray) -> tuple[list[NDArray], list[NDArray]]:
         act: list[NDArray] = [None for _ in range(self.num_layers)]
@@ -136,9 +184,9 @@ class NeuralNetworkGPU(NeuralNetwork):
 
         for i in reversed(range(1, self.num_layers)):
             delta_a[i] = self.weight_mult(self.W[i].T, delta_z[i])
-            grad_w[i] = np.sum(delta_z[i] @ act[i].swapaxes(1, -1), axis=0)  # noqa: Transpose the activations
+            grad_w[i] = self.gpu_grad(delta_z[i], act[i])  # noqa: Transpose the activations
             delta_z[i-1] = self.activation_function.derivative(
-                pre[i-1]) * delta_a[i][:, 1:, :]
+                pre[i-1]) * delta_a[i][:, 1:]
 
-        grad_w[0] = np.sum(delta_z[0] @ act[0].swapaxes(1, -1), axis=0)
+        grad_w[0] = self.gpu_grad(delta_z[0], act[0])
         return grad_w
