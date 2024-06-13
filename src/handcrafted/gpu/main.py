@@ -7,6 +7,7 @@ import numpy as np
 import sys
 sys.path.append("../")
 from dataloader import loaddata  # noqa: E402
+from params import learning_rate, regularization_strength, epochs, layers_size  # noqa: E402
 
 
 class Adagrad(Optimizer):
@@ -115,14 +116,14 @@ for X, Y in loaddata():
 
     m, n = X.shape
 
-    opt = Adam(eta=0.01)
-    model = NeuralNetworkGPU(dim_features=n, dim_label=1, dim_hidden_layers=[64, 64],
-                          activation_fun=ReLU(),
-                          loss_fun=MSELoss(), optimizer=opt)
+    opt = Adam(eta=learning_rate)
+    model = NeuralNetworkGPU(dim_features=n, dim_label=1, dim_hidden_layers=layers_size,
+                             activation_fun=ReLU(),
+                             loss_fun=MSELoss(), optimizer=opt)
     import time
     print("Training model")
     start = time.time()
-    model.train(trainX, trainY, lam=1e-5, epoch=2000)
+    model.train(trainX, trainY, lam=regularization_strength, epoch=epochs)
     end = time.time()
     print("Time elapsed:", end - start)
     predTestY = model.predict(testX)
