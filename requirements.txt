@@ -1,5 +1,7 @@
 yfinance
 numpy
+scikit-learn
+matplotlib
 torch
 pandas
 numba
