@@ -1,3 +1,5 @@
 yfinance
+numpy
+torch
 pandas
 numba
