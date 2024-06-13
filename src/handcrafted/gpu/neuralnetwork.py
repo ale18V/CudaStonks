@@ -130,8 +130,8 @@ class NeuralNetworkGPU(NeuralNetwork):
     @cuda.jit
     def grad_kernel(Dz: NDArray, A: NDArray, G: NDArray, m: int):
         """
-        @param: Dz list of m vectors of length p
-        @param: A list of m vectors of length q
+        @param: Dz list of m (column) vectors of length p
+        @param: A list of m (row) vectors of length q
         @return: G sum of the pairwise matrix product of the vectors in the lists
         """
         sDz = cuda.shared.array(shape=(4, BLOCK_SIZE), dtype=np.float64)
