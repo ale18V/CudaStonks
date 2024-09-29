@@ -1,4 +1,9 @@
-# CS147
+# CudaStonks
+This project was developed for the Spring 2024 class of CS147 (GPU programming) at UCR.
+
+It contains an hand written back propagating neural network for predicting stocks data, both a CPU-based implementation using plain python and numpy, and a GPU-based implementation using PyCuda.
+
+There is also a PyTorch version for comparison.
 
 ## Setup
 First of all clone the repository. 
