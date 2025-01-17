@@ -5,6 +5,10 @@ It contains an hand written back propagating neural network for predicting stock
 
 There is also a PyTorch version for comparison.
 
+*Performance of the model on the S&P500*
+![Performance of the model](plot.png "Performance of the model on the S&P500")
+
+
 ## Setup
 First of all clone the repository. 
 <br>Once you are done, install the required python packages:
