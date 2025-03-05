@@ -1,34 +1,8 @@
-from typing import Any
 import numpy as np
-from handcrafted.neuralnetwork import NeuralNetwork
-from numba import cuda, jit
+from ..neuralnetwork import NeuralNetwork
+from numba import cuda
 from numpy.typing import NDArray
-
 BLOCK_SIZE = 16
-
-
-class NNActivation:
-    def __call__(self, Z: NDArray) -> NDArray:
-        pass
-
-    def derivative(self, Z: NDArray) -> NDArray:
-        pass
-
-
-class NNLoss:
-    def __call__(self, F: NDArray, Y: NDArray) -> float:
-        pass
-
-    def derivative(self, F: NDArray, Y: NDArray) -> NDArray:
-        pass
-
-
-class Optimizer:
-    def __init__(self) -> None:
-        pass
-
-    def step(self, grad: list[NDArray], weights: list[NDArray]) -> list[NDArray]:
-        return []
 
 
 class NeuralNetworkGPU(NeuralNetwork):
@@ -140,7 +114,7 @@ class NeuralNetworkGPU(NeuralNetwork):
         tx, ty, tz = cuda.threadIdx.x, cuda.threadIdx.y, cuda.threadIdx.z
         tmp = 0.
         _, __, stride = cuda.gridsize(3)
-        
+
         for i in range(0, m, stride):
             if (z+i) < m:
                 if ty == 0:

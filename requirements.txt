@@ -1,3 +1,4 @@
+click
 yfinance
 numpy
 scikit-learn

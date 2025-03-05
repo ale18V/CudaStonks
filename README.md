@@ -10,8 +10,7 @@ There is also a PyTorch version for comparison.
 
 
 ## Setup
-First of all clone the repository. 
-<br>Once you are done, install the required python packages:
+First of all install the required python packages:
 ```
 # You can setup a virtual environment if you want
 python3 -m pip install venv
@@ -27,6 +26,11 @@ Change directory to `src` and from there you can run the targets of the makefile
 - Run `make cpu` to run the cpu version of the neural network
 - Run `make gpu` to run the gpu version of the neural network
 - Run `make pytorch` to run the model on pytorch
+
+## Run on gpu
+The code can be run on GPU provided that:
+- You have a NVIDIA GPU
+- You have cuda installed in your system
 
 ## Links
 - Presentation: https://docs.google.com/presentation/d/1pMCIn6s4FMmayNxdV6SKRwrzRtKbEc6xfHKGRCjdnIM/edit?usp=sharing

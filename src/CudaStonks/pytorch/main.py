@@ -1,31 +1,12 @@
 import numpy as np
-import os
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from dataloader import loaddata
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 
-
-class StockPredictor(nn.Module):
-    def __init__(self, dim_features: int):
-        super(StockPredictor, self).__init__()
-        # First hidden layer
-        self.fc1 = nn.Linear(dim_features, 64, dtype=torch.float64)
-        # Second hidden layer
-        self.fc2 = nn.Linear(64, 32, dtype=torch.float64)
-        self.fc3 = nn.Linear(32, 1, dtype=torch.float64)   # Output layer
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)  # Linear activation for the output layer
-        return x
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from .model import StockPredictor
+from .constants import device
 
 
 for X, Y in loaddata():
@@ -66,13 +47,6 @@ for X, Y in loaddata():
             if epoch % 100 == 0:
                 print(f'Epoch [{epoch}/{epochs}], Loss: {loss.item():.4f}')
 
-    # Train the model
-    import time
-    print("Training model")
-    start = time.time()
-    train(model, criterion, optimizer, trainX, trainY, epochs=2000)
-    end = time.time()
-    print("Time elapsed:", end-start)
     model.eval()
     with torch.no_grad():
         predTestY = model(testX).cpu().numpy()

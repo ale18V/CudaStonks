@@ -1,35 +1,19 @@
 import numpy as np
 from numpy.typing import NDArray
 import math
+from .models import NNActivation, NNLoss, NeuralNetworkInterface, Optimizer
 
 
-class NNActivation:
-    def __call__(self, Z: NDArray) -> NDArray:
-        pass
-
-    def derivative(self, Z: NDArray) -> NDArray:
-        pass
-
-
-class NNLoss:
-    def __call__(self, F: NDArray, Y: NDArray) -> float:
-        pass
-
-    def derivative(self, F: NDArray, Y: NDArray) -> NDArray:
-        pass
-
-
-class Optimizer:
-    def __init__(self) -> None:
-        pass
-
-    def step(self, grad: list[NDArray], weights: list[NDArray]) -> list[NDArray]:
-        return []
-
-
-class NeuralNetwork:
-    def __init__(self, dim_features: int, dim_label: int, dim_hidden_layers: list[int], optimizer: Optimizer,
-                 activation_fun: NNActivation, loss_fun: NNLoss) -> None:
+class NeuralNetwork(NeuralNetworkInterface):
+    def __init__(
+        self,
+        dim_features: int,
+        dim_label: int,
+        dim_hidden_layers: list[int],
+        optimizer: Optimizer,
+        activation_fun: NNActivation,
+        loss_fun: NNLoss,
+    ) -> None:
         """
         @param: X is a numpy array of shape (m, n)
         @param: Y is a numpy array of shape (m, 1)
@@ -39,8 +23,7 @@ class NeuralNetwork:
         self.dim_features = dim_features
         self.dim_label = dim_label
 
-        self.W: list[NDArray] = self.generate_weights(
-            self.num_layers, [dim_features] + dim_hidden_layers + [dim_label])
+        self.W: list[NDArray] = self.generate_weights(self.num_layers, [dim_features] + dim_hidden_layers + [dim_label])
         self.loss = 0
         self.loss_function = loss_fun
         self.activation_function = activation_fun
@@ -58,11 +41,11 @@ class NeuralNetwork:
             """p is the size of the previous layer
             d is the size of the current layer
             """
-            stdv = math.sqrt(2. / p)
-            return np.random.randn(p, d)*stdv
+            stdv = math.sqrt(2.0 / p)
+            return np.random.randn(p, d) * stdv
 
         for i in range(num_layers):
-            rows = dim_layers[i+1]
+            rows = dim_layers[i + 1]
             cols = dim_layers[i] + 1
             W[i] = kaiming_init(rows, cols)
 
@@ -82,11 +65,10 @@ class NeuralNetwork:
         pre: list[NDArray] = [None for _ in range(self.num_layers)]
 
         m, n = X.shape
-        act[0] = np.insert(X, obj=0, values=1, axis=1).reshape(m, n+1, 1)
+        act[0] = np.insert(X, obj=0, values=1, axis=1).reshape(m, n + 1, 1)
         for i in range(self.num_layers - 1):
             pre[i] = self.W[i] @ act[i]  # TODO: Matrix multiply
-            act[i+1] = np.insert(self.activation_function(pre[i]),
-                                 obj=0, values=1, axis=1)
+            act[i + 1] = np.insert(self.activation_function(pre[i]), obj=0, values=1, axis=1)
 
         pre[-1] = self.W[-1] @ act[-1]
 
@@ -104,14 +86,12 @@ class NeuralNetwork:
         delta_z: list[NDArray] = [None for _ in range(self.num_layers)]
         delta_a: list[NDArray] = [None for _ in range(self.num_layers)]
         grad_w: list[NDArray] = [None for _ in range(self.num_layers)]
-        delta_z[-1] = np.array(self.loss_function.derivative(F=pre[-1],
-                               Y=Y.reshape(m, n, 1)))
+        delta_z[-1] = np.array(self.loss_function.derivative(F=pre[-1], Y=Y.reshape(m, n, 1)))
 
         for i in reversed(range(1, self.num_layers)):
             delta_a[i] = self.W[i].T @ delta_z[i]
             grad_w[i] = np.sum(delta_z[i] @ act[i].swapaxes(1, -1), axis=0)  # noqa: Transpose the activations
-            delta_z[i-1] = self.activation_function.derivative(
-                pre[i-1]) * delta_a[i][:, 1:, :]
+            delta_z[i - 1] = self.activation_function.derivative(pre[i - 1]) * delta_a[i][:, 1:, :]
 
         grad_w[0] = np.sum(delta_z[0] @ act[0].swapaxes(1, -1), axis=0)
         return grad_w
@@ -121,7 +101,7 @@ class NeuralNetwork:
         for k in range(epoch):
             gradL = self.backward_propagate(X, Y)
             for j, w in enumerate(self.W):
-                gradL[j] += 2*lam*w
+                gradL[j] += 2 * lam * w
             self.W = self.optimizer.step(gradL, self.W)
 
             if k % 100 == 0:
@@ -137,7 +117,7 @@ class NeuralNetwork:
         return pre[-1].squeeze()
 
     def eval_loss(self, lam):
-        return self.loss + lam*np.sum([np.sum(w**2) for w in self.W])
+        return self.loss + lam * np.sum([np.sum(w**2) for w in self.W])
 
     def update_loss(self, f, y):
         self.loss += self.loss_function(f, y)
